@@ -12,7 +12,10 @@ def start(message):
     user_id = message.from_user.id
     # Проверяем, зарегистрировался ли юзер
     if database.check_user(user_id):
-        bot.send_message(user_id, 'Добро пожаловать!')
+        bot.send_message(user_id, 'Добро пожаловать!',
+                         reply_markup=telebot.types.ReplyKeyboardRemove())
+        bot.send_message(user_id, 'Выберите пункт меню:',
+                         reply_markup=buttons.main_menu(database.get_pr_buttons()))
     else:
         bot.send_message(user_id, 'Здравствуйте! Давайте начнем регистрацию!\n'
                                   'Введите свое имя',
@@ -41,8 +44,27 @@ def get_num(message, user_name):
                          reply_markup=telebot.types.ReplyKeyboardRemove())
     else:
         bot.send_message(user_id, 'Отправьте номер по кнопке!')
-        # Возвращение на этап получени номера
+        # Возвращение на этап получения номера
         bot.register_next_step_handler(message, get_num, user_name)
+
+# Обработчик команды /admin
+@bot.message_handler(commands=['admin'])
+def admin(message):
+    user_id = message.from_user.id
+    bot.send_message(user_id, 'Чтобы добавить товар, впишите следующие данные:\n'
+                              'Название, описание, кол-во на складе, цена, фото\n'
+                              'Пример:\n'
+                              'Картошка фри, свежая и вкусная, 100, 14000, https://fries.jpg\n\n'
+                              'Фото загружать на https://postimages.org/ и присылать прямую ссылку!')
+    # Переход на этап получения товара
+    bot.register_next_step_handler(message, get_pr)
+
+
+def get_pr(message):
+    user_id = message.from_user.id
+    product = message.text.split(', ')
+    database.add_pr_to_db(*product)
+    bot.send_message(user_id, 'Товар успешно добавлен!')
 
 # Запуск бота
 bot.polling(non_stop=True)
