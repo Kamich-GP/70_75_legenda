@@ -5,6 +5,8 @@ import database
 
 # Создаем объект бота
 bot = telebot.TeleBot('TOKEN')
+# Временные данные
+users = {}
 
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
@@ -47,6 +49,36 @@ def get_num(message, user_name):
         # Возвращение на этап получения номера
         bot.register_next_step_handler(message, get_num, user_name)
 
+# Обработчик выбора кол-ва товара
+@bot.callback_query_handler(lambda call: call.data in ['increment', 'decrement', 'to_cart', 'back'])
+def choose_count(call):
+    user_id = call.message.chat.id
+    if call.data == 'increment':
+        user_count = users[user_id]['product_count']
+        stock = database.get_exact_pr(users[user_id]['product_name'])[3]
+        if user_count < stock:
+            bot.edit_message_reply_markup(chat_id=user_id, message_id=call.message.message_id,
+                                          reply_markup=buttons.choose_pr_count(stock, 'increment', user_count))
+            users[user_id]['product_count'] += 1
+    elif call.data == 'decrement':
+        user_count = users[user_id]['product_count']
+        stock = database.get_exact_pr(users[user_id]['product_name'])[3]
+        if 1 < user_count:
+            bot.edit_message_reply_markup(chat_id=user_id, message_id=call.message.message_id,
+                                          reply_markup=buttons.choose_pr_count(stock, 'decrement', user_count))
+            users[user_id]['product_count'] -= 1
+    elif call.data == 'to_cart':
+        user_product = database.get_exact_pr(users[user_id]['product_name'])[1]
+        user_pr_amount = users[user_id]['product_count']
+        database.add_to_cart(user_id, user_product, user_pr_amount)
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        bot.send_message(user_id, 'Товар успешно помещен в корзину!',
+                         reply_markup=buttons.main_menu(database.get_pr_buttons()))
+    elif call.data == 'back':
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        bot.send_message(user_id, 'Выберите пункт меню:',
+                         reply_markup=buttons.main_menu(database.get_pr_buttons()))
+
 # Обработчик команды /admin
 @bot.message_handler(commands=['admin'])
 def admin(message):
@@ -65,6 +97,19 @@ def get_pr(message):
     product = message.text.split(', ')
     database.add_pr_to_db(*product)
     bot.send_message(user_id, 'Товар успешно добавлен!')
+
+# Обработка выбора товара
+@bot.callback_query_handler(lambda call: int(call.data) in [i[0] for i in database.get_all_pr()])
+def choose_product(call):
+    user_id = call.message.chat.id
+    pr_info = database.get_exact_pr(int(call.data))
+    bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+    bot.send_photo(user_id, pr_info[-1], caption=f'{pr_info[1]}\n\n'
+                                                 f'Описание: {pr_info[2]}\n'
+                                                 f'Кол-во товара: {pr_info[3]}\n'
+                                                 f'Цена: {pr_info[4]}сум',
+                   reply_markup=buttons.choose_pr_count(pr_info[3]))
+    users[user_id] = {'product_name': int(call.data), 'product_count': 1}
 
 # Запуск бота
 bot.polling(non_stop=True)
