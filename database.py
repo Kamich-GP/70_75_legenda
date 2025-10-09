@@ -73,6 +73,7 @@ def make_order(tg_id):
         stock = sql.execute('SELECT pr_count FROM products WHERE pr_name=?;', (user_product,)).fetchone()[0]
         new_count = stock - product_count
         sql.execute('UPDATE products SET pr_count=? WHERE pr_name=?;', (new_count, user_product))
+    clear_cart(tg_id)
     # Фиксируем изменения
     connection.commit()
 
