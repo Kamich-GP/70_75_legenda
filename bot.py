@@ -5,6 +5,7 @@ import database
 
 # Создаем объект бота
 bot = telebot.TeleBot('TOKEN')
+group_id = 'GROUP_ID'
 # Временные данные
 users = {}
 
@@ -78,6 +79,58 @@ def choose_count(call):
         bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
         bot.send_message(user_id, 'Выберите пункт меню:',
                          reply_markup=buttons.main_menu(database.get_pr_buttons()))
+
+# Работа с корзиной
+@bot.callback_query_handler(lambda call: call.data in ['cart', 'order', 'clear'])
+def cart_handle(call):
+    user_id = call.message.chat.id
+    if call.data == 'cart':
+        text = 'Ваша корзина:\n\n'
+        total = 0
+        user_cart = database.show_cart(user_id)
+        if user_cart:
+            for i in user_cart:
+                text += (f'Товар: {i[1]}\n'
+                         f'Количество: {i[-1]}\n\n')
+                total += database.get_pr_price(i[1]) * i[-1]
+            text += f'Итого: {total}сум'
+            bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+            bot.send_message(user_id, text, reply_markup=buttons.cart_buttons())
+    elif call.data == 'clear':
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        database.clear_cart(user_id)
+        bot.send_message(user_id, 'Ваша корзина очищена!',
+                         reply_markup=buttons.main_menu(database.get_pr_buttons()))
+    elif call.data == 'order':
+        text = (f'Новый заказ!\n'
+                f'Клиент: @{call.message.chat.username}\n\n')
+        total = 0
+        user_cart = database.show_cart(user_id)
+        for i in user_cart:
+            text += (f'Товар: {i[1]}\n'
+                     f'Количество: {i[-1]}\n\n')
+            total += database.get_pr_price(i[1]) * i[-1]
+        text += f'Итого: {total}'
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        bot.send_message(user_id, 'Отправьте локацию, куда вам привезти заказ!',
+                         reply_markup=buttons.loc_button())
+        # Переход на этап получения локации
+        bot.register_next_step_handler(call.message, get_loc, text)
+
+# Этап получения локации
+def get_loc(message, text):
+    user_id = message.from_user.id
+    # Проверяем правильность отправки локации
+    if message.location:
+        database.make_order(user_id)
+        bot.send_message(group_id, text)
+        bot.send_location(group_id, longitude=message.location.longitude, latitude=message.location.latitude)
+        bot.send_message(user_id, 'Ваш заказ успешно оформлен! Скоро с вами свяжутся!',
+                         reply_markup=telebot.types.ReplyKeyboardRemove())
+        start(message)
+    else:
+        bot.send_message(user_id, 'Отправьте локацию по кнопке!')
+        bot.register_next_step_handler(message, get_loc, text)
 
 # Обработчик команды /admin
 @bot.message_handler(commands=['admin'])

@@ -61,11 +61,12 @@ def clear_cart(tg_id):
 
 # Вывод корзины
 def show_cart(tg_id):
-    return sql.execute('SELECT * FROM cart WHERE tg_id=?;', (tg_id,)).fetchall()
+    return sql.execute('SELECT tg_id, user_product, user_pr_amount, SUM(user_pr_amount) AS total_count '
+                       'FROM cart WHERE tg_id=? GROUP BY user_product;', (tg_id,)).fetchall()
 
 # Оформление заказа
 def make_order(tg_id):
-    user_cart = [i[1:] for i in show_cart(tg_id)]
+    user_cart = [i[1:3] for i in show_cart(tg_id)]
 
     for user_product, product_count in user_cart:
         # Достаем кол-во товара со СКЛАДА
